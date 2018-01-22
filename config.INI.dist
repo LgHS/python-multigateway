@@ -10,6 +10,8 @@ PORT=
 HOOK_ADDR=
 AVATAR_URL=
 msgtemplate==*{sender}:* {msg}
+jointemplate=*{sender} left the channel*
+quittemplate=*{sender} joined the channel*
 
 [IRC]
 HOST=

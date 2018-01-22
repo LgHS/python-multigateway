@@ -9,7 +9,6 @@ import json
 import os
 import select
 import socket
-import sys
 import requests
 
 # readers = {
@@ -49,7 +48,9 @@ def parse_headers(raw_headers:str) -> dict:
     return dict(email.message_from_file(io.StringIO(raw_headers)).items())
 
 
-def load_config(filename):
+def load_config(filename:str) -> dotdict:
+    """Returns a dotdict from a file on disk"""
+
     conf = configparser.ConfigParser()
     conf.read(filename)
     
@@ -80,7 +81,7 @@ def init_rc_hook(host=None, port=None):
     return rc_hook
 
 
-def init_irc_conn(**kwargs):
+def init_irc_conn(**kwargs) -> socket:
     # Get the params from kwargs
     # Then from conf.IRC if absent in kwargs
     c = dotdict(
@@ -167,7 +168,7 @@ def http_recv_all(s):
     return (headers, body)
 
 
-def handle_irc(irc, readbuffer, room=None, rc=None):
+def handle_irc(irc:socket, read_buffer:str, room=None, rc=None):
     if room is None:
         room = conf.IRC.ROOM
     
@@ -183,17 +184,17 @@ def handle_irc(irc, readbuffer, room=None, rc=None):
     
     # new finishes with "\r\n" IF we received all
     
-    # readbuffer may contain uncomplete commands
-    readbuffer = readbuffer + new
+    # read_buffer may contain incomplete commands
+    read_buffer = read_buffer + new
     
     # Last entry is empty if we received all
-    commands = str.split(readbuffer, '\n')
+    commands = str.split(read_buffer, '\n')
     
     # Contains nothing if we received all
-    # Or, ALTERNATIVELY, some uncomplete command
-    readbuffer = commands.pop()
+    # Or, ALTERNATIVELY, some incomplete command
+    read_buffer = commands.pop()
     
-    # Process all BUT the (potentially) uncomplete command lines (in readbuffer)
+    # Process all BUT the (potentially) incomplete command lines (in read_buffer)
     for cmd in commands:
         cmd = str.rstrip(cmd)
         
@@ -224,16 +225,23 @@ def handle_irc(irc, readbuffer, room=None, rc=None):
                     ),
                 }
             )
+
+        # Apparently both received twice??
+        elif cmd[1] == 'QUIT':
+            pass
+        elif cmd[1] == 'JOIN' and cmd[2] == room:
+            pass
+
     
-    return readbuffer
+    return read_buffer
 
 
-def handle_rc_hook(rc_hook, rc_hook_addr=None, msgtemplate=None, bot_name=None, admin_username=None):
+def handle_rc_hook(rc_hook, rc_hook_addr=None, msg_template=None, bot_name=None, admin_username=None):
     if rc_hook_addr is None:
         rc_hook_addr = conf.RC.HOOK_ADDR
     
-    if msgtemplate is None:
-        msgtemplate = conf.IRC.msgtemplate
+    if msg_template is None:
+        msg_template = conf.IRC.msgtemplate
     
     if bot_name is None:
         bot_name = conf.IRC.BOT_NAME
@@ -269,7 +277,7 @@ def handle_rc_hook(rc_hook, rc_hook_addr=None, msgtemplate=None, bot_name=None, 
     # Not our bot nor any others'
     # PREVENT infinite backfeed loop
     if data['user_name'] != bot_name and not data['bot']:
-        msg = msgtemplate.format(
+        msg = msg_template.format(
             sender=data['user_name'],
             msg=data['text']
         )
@@ -280,27 +288,27 @@ def handle_rc_hook(rc_hook, rc_hook_addr=None, msgtemplate=None, bot_name=None, 
 
 
 if __name__ == '__main__':
-    # If you don't load a config then most functions requires to be given each 
+    # If you don't load a config then most functions requires to be given each
     #   individual parameter they may need in order to function.
-    # 
-    # Everytime you provide a parameter already given by the config, it will be
+    #
+    # Every time you provide a parameter already given by the config, it will be
     #   selected over the config param. Meaning you can overwrite default
     #   behaviour on each function call
     #
     conf = load_config('config.INI')
-    
+
     _print = print
 
     if conf.APP.LOGGING_FILE:
         print('Logging is enabled')
-        
+
         with contextlib.suppress(FileNotFoundError):
             # Back it up if it exists
             os.replace(conf.APP.LOGGING_FILE, conf.APP.LOGGING_FILE + '.BCK')
-            
+
             # Reset on start
             os.remove(conf.APP.LOGGING_FILE)
-        
+
         # Dev NOTE: Should probably wrap around while 42 instead of
         #   around each print call
         def print(*args, **kwargs):
@@ -310,31 +318,33 @@ if __name__ == '__main__':
     else:
         def print(*args, **kwargs):
             """Allows for printing in the Windows terminal without crashing."""
-            
+
             try:
                 _print(*args, **kwargs)
             except UnicodeEncodeError:
                 _print('Can\'t print that!')
-    
-    with contextlib.suppress(KeyboardInterrupt):
-        rc_hook = init_rc_hook()
-        irc = init_irc_conn()
-        
-        readbuffer = ''
-        
-        while 42:
-            rdy2read_sockets, __, __ = select.select([irc, rc_hook], (), ())
-            
-            for read_s in rdy2read_sockets:
-                if read_s is irc:
-                    # Incoming IRC commands
-                    readbuffer = handle_irc(irc, readbuffer)
-                else:
-                    # Incoming http POST request
-                    handle_rc_hook(rc_hook)
 
-    with contextlib.suppress(NameError):
-        irc.close()
-    
-    with contextlib.suppress(NameError):
-        rc_hook.close()
+    try:
+        with contextlib.suppress(KeyboardInterrupt):
+            # rc_hook = init_rc_hook()
+            irc = init_irc_conn()
+
+            read_buffer = ''
+
+            while 42:
+                # rdy2read_sockets, __, __ = select.select([irc, rc_hook], (), ())
+                rdy2read_sockets, __, __ = select.select([irc], (), ())
+
+                for read_s in rdy2read_sockets:
+                    if read_s is irc:
+                        # Incoming IRC commands
+                        read_buffer = handle_irc(irc, read_buffer)
+                    else:
+                        # Incoming http POST request
+                        handle_rc_hook(rc_hook)
+    finally:
+        with contextlib.suppress(NameError):
+            irc.close()
+
+        with contextlib.suppress(NameError):
+            rc_hook.close()
