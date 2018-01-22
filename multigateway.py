@@ -226,12 +226,34 @@ def handle_irc(irc:socket, read_buffer:str, room=None, rc=None):
                 }
             )
 
-        # Apparently both received twice??
+        # Apparently received twice??
         elif cmd[1] == 'QUIT':
-            pass
-        elif cmd[1] == 'JOIN' and cmd[2] == room:
-            pass
+            # DEV note: Should I use REGEX instead?
+            sender = cmd[0].split('!')[0][1:]
 
+            r = requests.post(
+                rc.HOOK_ADDR,
+                json={
+                    "icon_url": rc.AVATAR_URL.format(sender=sender),
+                    "text": rc.quittemplate.format(
+                        sender=sender
+                    ),
+                }
+            )
+        # Apparently received twice??
+        elif cmd[1] == 'JOIN' and cmd[2] == room:
+            # DEV note: Should I use REGEX instead?
+            sender = cmd[0].split('!')[0][1:]
+
+            r = requests.post(
+                rc.HOOK_ADDR,
+                json={
+                    "icon_url": rc.AVATAR_URL.format(sender=sender),
+                    "text": rc.jointemplate.format(
+                        sender=sender
+                    ),
+                }
+            )
     
     return read_buffer
 
