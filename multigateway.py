@@ -348,14 +348,14 @@ if __name__ == '__main__':
 
     try:
         with contextlib.suppress(KeyboardInterrupt):
-            # rc_hook = init_rc_hook()
+            rc_hook = init_rc_hook()
             irc = init_irc_conn()
 
             read_buffer = ''
 
             while 42:
-                # rdy2read_sockets, __, __ = select.select([irc, rc_hook], (), ())
-                rdy2read_sockets, __, __ = select.select([irc], (), ())
+                rdy2read_sockets, __, __ = select.select([irc, rc_hook], (), ())
+                # rdy2read_sockets, __, __ = select.select([irc], (), ())
 
                 for read_s in rdy2read_sockets:
                     if read_s is irc:
