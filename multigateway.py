@@ -354,7 +354,7 @@ if __name__ == '__main__':
             read_buffer = ''
 
             while 42:
-                rdy2read_sockets, __, __ = select.select([irc, rc_hook], (), ())
+                rdy2read_sockets, __, __ = select.select([irc, rc_hook], (), (), 0.1)
                 # rdy2read_sockets, __, __ = select.select([irc], (), ())
 
                 for read_s in rdy2read_sockets:
